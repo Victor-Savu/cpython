@@ -2078,7 +2078,7 @@ compiler_for(struct compiler *c, stmt_ty s)
     compiler_use_next_block(c, cleanup);
     ADDOP(c, POP_BLOCK);
     compiler_pop_fblock(c, LOOP, start);
-    VISIT_SEQ(c, stmt, s->v.For.orelse);
+    // VISIT_SEQ(c, stmt, s->v.For.orelse);
     compiler_use_next_block(c, end);
     return 1;
 }
@@ -2162,7 +2162,7 @@ compiler_async_for(struct compiler *c, stmt_ty s)
     ADDOP_JABS(c, JUMP_ABSOLUTE, end);
 
     compiler_use_next_block(c, after_loop_else);
-    VISIT_SEQ(c, stmt, s->v.For.orelse);
+    // VISIT_SEQ(c, stmt, s->v.For.orelse);
 
     compiler_use_next_block(c, end);
 

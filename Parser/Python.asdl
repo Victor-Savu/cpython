@@ -30,8 +30,8 @@ module Python
           | AugAssign(expr target, operator op, expr value)
 
           -- use 'orelse' because else is a keyword in target languages
-          | For(expr target, expr iter, stmt* body, elsehandler* orelse)
-          | AsyncFor(expr target, expr iter, stmt* body, elsehandler* orelse)
+          | For(expr target, expr iter, stmt* body, elsehandler? orelse)
+          | AsyncFor(expr target, expr iter, stmt* body, elsehandler? orelse)
           | While(expr test, stmt* body, stmt* orelse)
           | If(expr test, stmt* body, stmt* orelse)
           | With(withitem* items, stmt* body)

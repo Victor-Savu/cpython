@@ -26,6 +26,8 @@ typedef enum _cmpop { Eq=1, NotEq=2, Lt=3, LtE=4, Gt=5, GtE=6, Is=7, IsNot=8,
 
 typedef struct _comprehension *comprehension_ty;
 
+typedef struct _elsehandler *elsehandler_ty;
+
 typedef struct _excepthandler *excepthandler_ty;
 
 typedef struct _arguments *arguments_ty;
@@ -120,14 +122,14 @@ struct _stmt {
             expr_ty target;
             expr_ty iter;
             asdl_seq *body;
-            asdl_seq *orelse;
+            elsehandler_ty orelse;
         } For;
         
         struct {
             expr_ty target;
             expr_ty iter;
             asdl_seq *body;
-            asdl_seq *orelse;
+            elsehandler_ty orelse;
         } AsyncFor;
         
         struct {
@@ -383,6 +385,20 @@ struct _comprehension {
     asdl_seq *ifs;
 };
 
+enum _elsehandler_kind {ElseHandler_kind=1};
+struct _elsehandler {
+    enum _elsehandler_kind kind;
+    union {
+        struct {
+            identifier name;
+            asdl_seq *body;
+        } ElseHandler;
+        
+    } v;
+    int lineno;
+    int col_offset;
+};
+
 enum _excepthandler_kind {ExceptHandler_kind=1};
 struct _excepthandler {
     enum _excepthandler_kind kind;
@@ -462,11 +478,12 @@ stmt_ty _Py_Assign(asdl_seq * targets, expr_ty value, int lineno, int
 stmt_ty _Py_AugAssign(expr_ty target, operator_ty op, expr_ty value, int
                       lineno, int col_offset, PyArena *arena);
 #define For(a0, a1, a2, a3, a4, a5, a6) _Py_For(a0, a1, a2, a3, a4, a5, a6)
-stmt_ty _Py_For(expr_ty target, expr_ty iter, asdl_seq * body, asdl_seq *
+stmt_ty _Py_For(expr_ty target, expr_ty iter, asdl_seq * body, elsehandler_ty
                 orelse, int lineno, int col_offset, PyArena *arena);
 #define AsyncFor(a0, a1, a2, a3, a4, a5, a6) _Py_AsyncFor(a0, a1, a2, a3, a4, a5, a6)
-stmt_ty _Py_AsyncFor(expr_ty target, expr_ty iter, asdl_seq * body, asdl_seq *
-                     orelse, int lineno, int col_offset, PyArena *arena);
+stmt_ty _Py_AsyncFor(expr_ty target, expr_ty iter, asdl_seq * body,
+                     elsehandler_ty orelse, int lineno, int col_offset, PyArena
+                     *arena);
 #define While(a0, a1, a2, a3, a4, a5) _Py_While(a0, a1, a2, a3, a4, a5)
 stmt_ty _Py_While(expr_ty test, asdl_seq * body, asdl_seq * orelse, int lineno,
                   int col_offset, PyArena *arena);
@@ -601,6 +618,9 @@ slice_ty _Py_Index(expr_ty value, PyArena *arena);
 #define comprehension(a0, a1, a2, a3) _Py_comprehension(a0, a1, a2, a3)
 comprehension_ty _Py_comprehension(expr_ty target, expr_ty iter, asdl_seq *
                                    ifs, PyArena *arena);
+#define ElseHandler(a0, a1, a2, a3, a4) _Py_ElseHandler(a0, a1, a2, a3, a4)
+elsehandler_ty _Py_ElseHandler(identifier name, asdl_seq * body, int lineno,
+                               int col_offset, PyArena *arena);
 #define ExceptHandler(a0, a1, a2, a3, a4, a5) _Py_ExceptHandler(a0, a1, a2, a3, a4, a5)
 excepthandler_ty _Py_ExceptHandler(expr_ty type, identifier name, asdl_seq *
                                    body, int lineno, int col_offset, PyArena

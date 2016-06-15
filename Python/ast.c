@@ -398,15 +398,25 @@ validate_stmt(stmt_ty stmt)
         return validate_expr(stmt->v.AugAssign.target, Store) &&
             validate_expr(stmt->v.AugAssign.value, Load);
     case For_kind:
-        return validate_expr(stmt->v.For.target, Store) &&
+        if (! (validate_expr(stmt->v.For.target, Store) &&
             validate_expr(stmt->v.For.iter, Load) &&
-            validate_body(stmt->v.For.body, "For") &&
-            validate_stmts(stmt->v.For.orelse);
+            validate_body(stmt->v.For.body, "For") ) )
+            return 0;
+        if (stmt->v.For.orelse) {
+            elsehandler_ty orelse = stmt->v.For.orelse;
+            return validate_stmts(orelse->v.ElseHandler.body);
+        }
+        return 1;
     case AsyncFor_kind:
-        return validate_expr(stmt->v.AsyncFor.target, Store) &&
-            validate_expr(stmt->v.AsyncFor.iter, Load) &&
-            validate_body(stmt->v.AsyncFor.body, "AsyncFor") &&
-            validate_stmts(stmt->v.AsyncFor.orelse);
+        if (! (validate_expr(stmt->v.For.target, Store) &&
+            validate_expr(stmt->v.For.iter, Load) &&
+            validate_body(stmt->v.For.body, "AsyncFor") ) )
+            return 0;
+        if (stmt->v.For.orelse) {
+            elsehandler_ty orelse = stmt->v.For.orelse;
+            return validate_stmts(orelse->v.ElseHandler.body);
+        }
+        return 1;
     case While_kind:
         return validate_expr(stmt->v.While.test, Load) &&
             validate_body(stmt->v.While.body, "While") &&
@@ -3569,10 +3579,42 @@ ast_for_while_stmt(struct compiling *c, const node *n)
     return NULL;
 }
 
+static elsehandler_ty
+ast_for_else_clause(struct compiling *c, const node *els, node *body)
+{
+    /* else_clause: 'else' [test] */
+    asdl_seq *suite_seq;
+    identifier e = NULL;
+
+    REQ(els, else_clause);
+    REQ(body, suite);
+
+    if (NCH(els) == 2) {
+        e = NEW_IDENTIFIER(CHILD(els, 1));
+        if (!e)
+            return NULL;
+        if (forbidden_name(c, e, CHILD(els, 1), 0))
+            return NULL;
+    } else if (NCH(els) != 1) {
+        PyErr_Format(PyExc_SystemError,
+                     "wrong number of children for 'except' clause: %d",
+                     NCH(els));
+        return NULL;
+    }
+
+    suite_seq = ast_for_suite(c, body);
+    if (!suite_seq)
+        return NULL;
+
+    return ElseHandler(e, suite_seq, LINENO(els),
+                         els->n_col_offset, c->c_arena);
+}
+
 static stmt_ty
 ast_for_for_stmt(struct compiling *c, const node *n, int is_async)
 {
-    asdl_seq *_target, *seq = NULL, *suite_seq;
+    asdl_seq *_target, *suite_seq;
+    elsehandler_ty orelse = NULL;
     expr_ty expression;
     expr_ty target, first;
     const node *node_target;
@@ -3580,8 +3622,8 @@ ast_for_for_stmt(struct compiling *c, const node *n, int is_async)
     REQ(n, for_stmt);
 
     if (NCH(n) == 9) {
-        seq = ast_for_suite(c, CHILD(n, 8));
-        if (!seq)
+        orelse = ast_for_else_clause(c, CHILD(n, 6), CHILD(n, 8));
+        if (!orelse)
             return NULL;
     }
 
@@ -3605,11 +3647,11 @@ ast_for_for_stmt(struct compiling *c, const node *n, int is_async)
         return NULL;
 
     if (is_async)
-        return AsyncFor(target, expression, suite_seq, seq,
+        return AsyncFor(target, expression, suite_seq, orelse,
                         LINENO(n), n->n_col_offset,
                         c->c_arena);
     else
-        return For(target, expression, suite_seq, seq,
+        return For(target, expression, suite_seq, orelse,
                    LINENO(n), n->n_col_offset,
                    c->c_arena);
 }
