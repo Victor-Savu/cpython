@@ -30,8 +30,8 @@ module Python
           | AugAssign(expr target, operator op, expr value)
 
           -- use 'orelse' because else is a keyword in target languages
-          | For(expr target, expr iter, stmt* body, stmt* orelse)
-          | AsyncFor(expr target, expr iter, stmt* body, stmt* orelse)
+          | For(expr target, expr iter, stmt* body, elsehandler* orelse)
+          | AsyncFor(expr target, expr iter, stmt* body, elsehandler* orelse)
           | While(expr test, stmt* body, stmt* orelse)
           | If(expr test, stmt* body, stmt* orelse)
           | With(withitem* items, stmt* body)
@@ -109,6 +109,9 @@ module Python
     cmpop = Eq | NotEq | Lt | LtE | Gt | GtE | Is | IsNot | In | NotIn
 
     comprehension = (expr target, expr iter, expr* ifs)
+
+    elsehandler = ElseHandler(identifier? name, stmt* body)
+                  attributes (int lineno, int col_offset)
 
     excepthandler = ExceptHandler(expr? type, identifier? name, stmt* body)
                     attributes (int lineno, int col_offset)
