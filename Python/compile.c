@@ -736,6 +736,8 @@ compiler_set_qualname(struct compiler *c)
 
 
 /* Allocate a new block and return a pointer to it.
+   The block is also added to the block list inside
+   the compiler unit.
    Returns NULL on error.
 */
 
@@ -758,16 +760,7 @@ compiler_new_block(struct compiler *c)
     return b;
 }
 
-static basicblock *
-compiler_next_block(struct compiler *c)
-{
-    basicblock *block = compiler_new_block(c);
-    if (block == NULL)
-        return NULL;
-    c->u->u_curblock->b_next = block;
-    c->u->u_curblock = block;
-    return block;
-}
+/* Sets the current block */
 
 static basicblock *
 compiler_use_next_block(struct compiler *c, basicblock *block)
@@ -776,6 +769,18 @@ compiler_use_next_block(struct compiler *c, basicblock *block)
     c->u->u_curblock->b_next = block;
     c->u->u_curblock = block;
     return block;
+}
+
+/* Creates a new block and sets it as the current block.
+   Returns NULL if a block could not be created.
+*/
+static basicblock *
+compiler_next_block(struct compiler *c)
+{
+    basicblock *block = compiler_new_block(c);
+    if (block == NULL)
+        return NULL;
+    return compiler_use_next_block(c, block);
 }
 
 /* Returns the offset of the next instruction in the current block's
@@ -953,7 +958,7 @@ PyCompile_OpcodeStackEffect(int opcode, int oparg)
         case UNPACK_EX:
             return (oparg&0xFF) + (oparg>>8);
         case FOR_ITER:
-            return 1; /* or -1, at end of iterator */
+            return 1; /* or 0, at end of iterator */
 
         case STORE_ATTR:
             return -2;
@@ -2076,9 +2081,23 @@ compiler_for(struct compiler *c, stmt_ty s)
     VISIT_SEQ(c, stmt, s->v.For.body);
     ADDOP_JABS(c, JUMP_ABSOLUTE, start);
     compiler_use_next_block(c, cleanup);
+    if (s->v.For.orelse) {
+        elsehandler_ty orelse = s->v.For.orelse;
+        if (orelse->v.ElseHandler.name) {
+            compiler_nameop(c, orelse->v.ElseHandler.name, Store);
+        }
+        else {
+            ADDOP(c, POP_TOP);
+        }
+    } else {
+        ADDOP(c, POP_TOP);
+    }
     ADDOP(c, POP_BLOCK);
     compiler_pop_fblock(c, LOOP, start);
-    // VISIT_SEQ(c, stmt, s->v.For.orelse);
+    if (s->v.For.orelse) {
+        elsehandler_ty orelse = s->v.For.orelse;
+        VISIT_SEQ(c, stmt, orelse->v.ElseHandler.body);
+    }
     compiler_use_next_block(c, end);
     return 1;
 }
@@ -2162,7 +2181,10 @@ compiler_async_for(struct compiler *c, stmt_ty s)
     ADDOP_JABS(c, JUMP_ABSOLUTE, end);
 
     compiler_use_next_block(c, after_loop_else);
-    // VISIT_SEQ(c, stmt, s->v.For.orelse);
+    if (s->v.For.orelse) {
+        elsehandler_ty orelse = s->v.For.orelse;
+        VISIT_SEQ(c, stmt, orelse->v.ElseHandler.body);
+    }
 
     compiler_use_next_block(c, end);
 
@@ -3618,7 +3640,7 @@ compiler_comprehension_generator(struct compiler *c,
         if (!compiler_comprehension_generator(c,
                                               generators, gen_index,
                                               elt, val, type))
-        return 0;
+            return 0;
 
     /* only append after the last for generator */
     if (gen_index >= asdl_seq_LEN(generators)) {
@@ -3653,6 +3675,7 @@ compiler_comprehension_generator(struct compiler *c,
     compiler_use_next_block(c, if_cleanup);
     ADDOP_JABS(c, JUMP_ABSOLUTE, start);
     compiler_use_next_block(c, anchor);
+    ADDOP(c, POP_TOP);
 
     return 1;
 }
@@ -4487,7 +4510,7 @@ stackdepth_walk(struct compiler *c, basicblock *b, int depth, int maxdepth)
         if (instr->i_jrel || instr->i_jabs) {
             target_depth = depth;
             if (instr->i_opcode == FOR_ITER) {
-                target_depth = depth-2;
+                target_depth = depth-1;
             }
             else if (instr->i_opcode == SETUP_FINALLY ||
                      instr->i_opcode == SETUP_EXCEPT) {

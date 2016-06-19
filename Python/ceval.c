@@ -3048,7 +3048,7 @@ PyEval_EvalFrameEx(PyFrameObject *f, int throwflag)
 
         PREDICTED(FOR_ITER);
         TARGET(FOR_ITER) {
-            /* before: [iter]; after: [iter, iter()] *or* [] */
+            /* before: [iter]; after: [iter, iter()] *or* [stop_val] */
             PyObject *iter = TOP();
             PyObject *next = (*iter->ob_type->tp_iternext)(iter);
             if (next != NULL) {
@@ -3058,14 +3058,23 @@ PyEval_EvalFrameEx(PyFrameObject *f, int throwflag)
                 DISPATCH();
             }
             if (PyErr_Occurred()) {
+                PyObject *val;
+                int err;
                 if (!PyErr_ExceptionMatches(PyExc_StopIteration))
                     goto error;
                 else if (tstate->c_tracefunc != NULL)
                     call_exc_trace(tstate->c_tracefunc, tstate->c_traceobj, tstate, f);
+                err = _PyGen_FetchStopIterationValue(&val);
+                fflush(stdout);
+                if (err < 0)
+                    goto error;
+                SET_TOP(val);
                 PyErr_Clear();
+            } else {
+              Py_INCREF(Py_None);
+              SET_TOP(Py_None);
             }
             /* iterator ended normally */
-            STACKADJ(-1);
             Py_DECREF(iter);
             JUMPBY(oparg);
             DISPATCH();
