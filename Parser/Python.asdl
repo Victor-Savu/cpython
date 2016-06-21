@@ -110,7 +110,7 @@ module Python
 
     comprehension = (expr target, expr iter, expr* ifs)
 
-    elsehandler = ElseHandler(identifier? name, stmt* body)
+    elsehandler = ElseHandler(expr? var, stmt* body)
                   attributes (int lineno, int col_offset)
 
     excepthandler = ExceptHandler(expr? type, identifier? name, stmt* body)

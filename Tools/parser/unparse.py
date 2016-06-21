@@ -193,9 +193,9 @@ class Unparser:
 
     def _ElseHandler(self, t):
         self.fill("else")
-        if t.name:
+        if t.var:
             self.write(" ")
-            self.write(t.name)
+            self.dispatch(t.var)
         self.enter()
         self.dispatch(t.body)
         self.leave()

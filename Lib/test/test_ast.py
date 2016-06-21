@@ -685,7 +685,7 @@ class ASTValidatorTests(unittest.TestCase):
                   "must have Load context")
         e = ast.Expr(ast.Name("x", ast.Store()))
         els_e = ast.ElseHandler(None, [e])
-        named_else = ast.ElseHandler("x", [e])
+        named_else = ast.ElseHandler(ast.Name("e", ast.Store()), [e])
         self.stmt(ast.For(x, y, [e], els), "must have Load context")
         self.stmt(ast.For(x, y, [p], els_e), "must have Load context")
         self.stmt(ast.For(x, y, [p], named_else), "must have Load context")

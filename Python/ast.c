@@ -404,7 +404,9 @@ validate_stmt(stmt_ty stmt)
             return 0;
         if (stmt->v.For.orelse) {
             elsehandler_ty orelse = stmt->v.For.orelse;
-            return validate_stmts(orelse->v.ElseHandler.body);
+            expr_ty var = orelse->v.ElseHandler.var;
+            return (!var || validate_expr(var, Store)) &&
+                validate_stmts(orelse->v.ElseHandler.body);
         }
         return 1;
     case AsyncFor_kind:
@@ -414,7 +416,9 @@ validate_stmt(stmt_ty stmt)
             return 0;
         if (stmt->v.AsyncFor.orelse) {
             elsehandler_ty orelse = stmt->v.AsyncFor.orelse;
-            return validate_stmts(orelse->v.ElseHandler.body);
+            expr_ty var = orelse->v.ElseHandler.var;
+            return (!var || validate_expr(var, Store)) &&
+                validate_stmts(orelse->v.ElseHandler.body);
         }
         return 1;
     case While_kind:
@@ -3582,19 +3586,22 @@ ast_for_while_stmt(struct compiling *c, const node *n)
 static elsehandler_ty
 ast_for_else_clause(struct compiling *c, const node *els, node *body)
 {
-    /* else_clause: 'else' [test] */
+    /* else_clause: 'else' [exprlist] */
     asdl_seq *suite_seq;
-    identifier e = NULL;
+    expr_ty var = NULL;
 
     REQ(els, else_clause);
     REQ(body, suite);
 
     if (NCH(els) == 2) {
-        e = NEW_IDENTIFIER(CHILD(els, 1));
-        if (!e)
+        const node *node_target = CHILD(els, 1);
+        asdl_seq *_target = ast_for_exprlist(c, node_target, Store);
+        if (!_target)
             return NULL;
-        if (forbidden_name(c, e, CHILD(els, 1), 0))
-            return NULL;
+        var = (expr_ty)asdl_seq_GET(_target, 0);
+        if (NCH(node_target) != 1) {
+            var = Tuple(_target, Store, var->lineno, var->col_offset, c->c_arena);
+        }
     } else if (NCH(els) != 1) {
         PyErr_Format(PyExc_SystemError,
                      "wrong number of children for 'except' clause: %d",
@@ -3606,7 +3613,7 @@ ast_for_else_clause(struct compiling *c, const node *els, node *body)
     if (!suite_seq)
         return NULL;
 
-    return ElseHandler(e, suite_seq, LINENO(els),
+    return ElseHandler(var, suite_seq, LINENO(els),
                          els->n_col_offset, c->c_arena);
 }
 

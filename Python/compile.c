@@ -2083,8 +2083,8 @@ compiler_for(struct compiler *c, stmt_ty s)
     compiler_use_next_block(c, cleanup);
     if (s->v.For.orelse) {
         elsehandler_ty orelse = s->v.For.orelse;
-        if (orelse->v.ElseHandler.name) {
-            compiler_nameop(c, orelse->v.ElseHandler.name, Store);
+        if (orelse->v.ElseHandler.var) {
+            VISIT(c, expr, orelse->v.ElseHandler.var);
         }
         else {
             ADDOP(c, POP_TOP);

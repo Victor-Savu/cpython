@@ -1591,9 +1591,9 @@ symtable_visit_arguments(struct symtable *st, arguments_ty a)
 static int
 symtable_visit_elsehandler(struct symtable *st, elsehandler_ty eh)
 {
-    if (eh->v.ElseHandler.name)
-        if (!symtable_add_def(st, eh->v.ElseHandler.name, DEF_LOCAL))
-            return 0;
+    if (eh->v.ElseHandler.var) {
+        VISIT(st, expr, eh->v.ElseHandler.var);
+    }
     VISIT_SEQ(st, stmt, eh->v.ElseHandler.body);
     return 1;
 }
