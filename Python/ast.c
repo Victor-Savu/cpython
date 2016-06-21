@@ -408,12 +408,12 @@ validate_stmt(stmt_ty stmt)
         }
         return 1;
     case AsyncFor_kind:
-        if (! (validate_expr(stmt->v.For.target, Store) &&
-            validate_expr(stmt->v.For.iter, Load) &&
-            validate_body(stmt->v.For.body, "AsyncFor") ) )
+        if (! (validate_expr(stmt->v.AsyncFor.target, Store) &&
+            validate_expr(stmt->v.AsyncFor.iter, Load) &&
+            validate_body(stmt->v.AsyncFor.body, "AsyncFor") ) )
             return 0;
-        if (stmt->v.For.orelse) {
-            elsehandler_ty orelse = stmt->v.For.orelse;
+        if (stmt->v.AsyncFor.orelse) {
+            elsehandler_ty orelse = stmt->v.AsyncFor.orelse;
             return validate_stmts(orelse->v.ElseHandler.body);
         }
         return 1;
