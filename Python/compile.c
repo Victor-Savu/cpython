@@ -2160,7 +2160,17 @@ compiler_async_for(struct compiler *c, stmt_ty s)
     ADDOP_JABS(c, POP_JUMP_IF_FALSE, try_cleanup);
 
     ADDOP(c, POP_TOP);
-    ADDOP(c, POP_TOP);
+    if (s->v.AsyncFor.orelse) {
+        elsehandler_ty orelse = s->v.AsyncFor.orelse;
+        if (orelse->v.ElseHandler.var) {
+            VISIT(c, expr, orelse->v.ElseHandler.var);
+        }
+        else {
+            ADDOP(c, POP_TOP);
+        }
+    } else {
+        ADDOP(c, POP_TOP);
+    }
     ADDOP(c, POP_TOP);
     ADDOP(c, POP_EXCEPT); /* for SETUP_EXCEPT */
     ADDOP(c, POP_BLOCK); /* for SETUP_LOOP */
@@ -2181,8 +2191,8 @@ compiler_async_for(struct compiler *c, stmt_ty s)
     ADDOP_JABS(c, JUMP_ABSOLUTE, end);
 
     compiler_use_next_block(c, after_loop_else);
-    if (s->v.For.orelse) {
-        elsehandler_ty orelse = s->v.For.orelse;
+    if (s->v.AsyncFor.orelse) {
+        elsehandler_ty orelse = s->v.AsyncFor.orelse;
         VISIT_SEQ(c, stmt, orelse->v.ElseHandler.body);
     }
 

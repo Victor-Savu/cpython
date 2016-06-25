@@ -438,8 +438,9 @@ static char *elsehandler_attributes[] = {
 };
 static PyObject* ast2obj_elsehandler(void*);
 static PyTypeObject *ElseHandler_type;
+_Py_IDENTIFIER(var);
 static char *ElseHandler_fields[]={
-    "name",
+    "var",
     "body",
 };
 static PyTypeObject *excepthandler_type;
@@ -2449,15 +2450,15 @@ comprehension(expr_ty target, expr_ty iter, asdl_seq * ifs, PyArena *arena)
 }
 
 elsehandler_ty
-ElseHandler(identifier name, asdl_seq * body, int lineno, int col_offset,
-            PyArena *arena)
+ElseHandler(expr_ty var, asdl_seq * body, int lineno, int col_offset, PyArena
+            *arena)
 {
     elsehandler_ty p;
     p = (elsehandler_ty)PyArena_Malloc(arena, sizeof(*p));
     if (!p)
         return NULL;
     p->kind = ElseHandler_kind;
-    p->v.ElseHandler.name = name;
+    p->v.ElseHandler.var = var;
     p->v.ElseHandler.body = body;
     p->lineno = lineno;
     p->col_offset = col_offset;
@@ -3716,9 +3717,9 @@ ast2obj_elsehandler(void* _o)
     case ElseHandler_kind:
         result = PyType_GenericNew(ElseHandler_type, NULL, NULL);
         if (!result) goto failed;
-        value = ast2obj_identifier(o->v.ElseHandler.name);
+        value = ast2obj_expr(o->v.ElseHandler.var);
         if (!value) goto failed;
-        if (_PyObject_SetAttrId(result, &PyId_name, value) == -1)
+        if (_PyObject_SetAttrId(result, &PyId_var, value) == -1)
             goto failed;
         Py_DECREF(value);
         value = ast2obj_list(o->v.ElseHandler.body, ast2obj_stmt);
@@ -7170,18 +7171,18 @@ obj2ast_elsehandler(PyObject* obj, elsehandler_ty* out, PyArena* arena)
         return 1;
     }
     if (isinstance) {
-        identifier name;
+        expr_ty var;
         asdl_seq* body;
 
-        if (exists_not_none(obj, &PyId_name)) {
+        if (exists_not_none(obj, &PyId_var)) {
             int res;
-            tmp = _PyObject_GetAttrId(obj, &PyId_name);
+            tmp = _PyObject_GetAttrId(obj, &PyId_var);
             if (tmp == NULL) goto failed;
-            res = obj2ast_identifier(tmp, &name, arena);
+            res = obj2ast_expr(tmp, &var, arena);
             if (res != 0) goto failed;
             Py_CLEAR(tmp);
         } else {
-            name = NULL;
+            var = NULL;
         }
         if (_PyObject_HasAttrId(obj, &PyId_body)) {
             int res;
@@ -7207,7 +7208,7 @@ obj2ast_elsehandler(PyObject* obj, elsehandler_ty* out, PyArena* arena)
             PyErr_SetString(PyExc_TypeError, "required field \"body\" missing from ElseHandler");
             return 1;
         }
-        *out = ElseHandler(name, body, lineno, col_offset, arena);
+        *out = ElseHandler(var, body, lineno, col_offset, arena);
         if (*out == NULL) goto failed;
         return 0;
     }

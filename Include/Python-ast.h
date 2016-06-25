@@ -390,7 +390,7 @@ struct _elsehandler {
     enum _elsehandler_kind kind;
     union {
         struct {
-            identifier name;
+            expr_ty var;
             asdl_seq *body;
         } ElseHandler;
         
@@ -619,8 +619,8 @@ slice_ty _Py_Index(expr_ty value, PyArena *arena);
 comprehension_ty _Py_comprehension(expr_ty target, expr_ty iter, asdl_seq *
                                    ifs, PyArena *arena);
 #define ElseHandler(a0, a1, a2, a3, a4) _Py_ElseHandler(a0, a1, a2, a3, a4)
-elsehandler_ty _Py_ElseHandler(identifier name, asdl_seq * body, int lineno,
-                               int col_offset, PyArena *arena);
+elsehandler_ty _Py_ElseHandler(expr_ty var, asdl_seq * body, int lineno, int
+                               col_offset, PyArena *arena);
 #define ExceptHandler(a0, a1, a2, a3, a4, a5) _Py_ExceptHandler(a0, a1, a2, a3, a4, a5)
 excepthandler_ty _Py_ExceptHandler(expr_ty type, identifier name, asdl_seq *
                                    body, int lineno, int col_offset, PyArena
