@@ -2107,12 +2107,19 @@ static int
 compiler_async_for(struct compiler *c, stmt_ty s)
 {
     static PyObject *stopiter_error = NULL;
+    static PyObject *stopiter_value = NULL;
     basicblock *try, *except, *end, *after_try, *try_cleanup,
                *after_loop, *after_loop_else;
 
     if (stopiter_error == NULL) {
         stopiter_error = PyUnicode_InternFromString("StopAsyncIteration");
         if (stopiter_error == NULL)
+            return 0;
+    }
+
+    if (stopiter_value == NULL) {
+        stopiter_value = PyUnicode_InternFromString("value");
+        if (stopiter_value == NULL)
             return 0;
     }
 
@@ -2156,10 +2163,11 @@ compiler_async_for(struct compiler *c, stmt_ty s)
     compiler_use_next_block(c, except);
     ADDOP(c, DUP_TOP);
     ADDOP_O(c, LOAD_GLOBAL, stopiter_error, names);
-    ADDOP_I(c, COMPARE_OP, PyCmp_EXC_MATCH);
+    ADDOP_I(c, COMPARE_OP, PyCmp_EXC_MATCH)
     ADDOP_JABS(c, POP_JUMP_IF_FALSE, try_cleanup);
 
     ADDOP(c, POP_TOP);
+    ADDOP_O(c, LOAD_ATTR, stopiter_value, names);
     if (s->v.AsyncFor.orelse) {
         elsehandler_ty orelse = s->v.AsyncFor.orelse;
         if (orelse->v.ElseHandler.var) {
