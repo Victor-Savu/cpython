@@ -187,6 +187,7 @@ static int symtable_visit_listcomp(struct symtable *st, expr_ty s);
 static int symtable_visit_setcomp(struct symtable *st, expr_ty s);
 static int symtable_visit_dictcomp(struct symtable *st, expr_ty s);
 static int symtable_visit_arguments(struct symtable *st, arguments_ty);
+static int symtable_visit_elsehandler(struct symtable *st, elsehandler_ty);
 static int symtable_visit_excepthandler(struct symtable *st, excepthandler_ty);
 static int symtable_visit_alias(struct symtable *st, alias_ty);
 static int symtable_visit_comprehension(struct symtable *st, comprehension_ty);
@@ -1225,7 +1226,7 @@ symtable_visit_stmt(struct symtable *st, stmt_ty s)
         VISIT(st, expr, s->v.For.iter);
         VISIT_SEQ(st, stmt, s->v.For.body);
         if (s->v.For.orelse)
-            VISIT_SEQ(st, stmt, s->v.For.orelse);
+            VISIT(st, elsehandler, s->v.For.orelse);
         break;
     case While_kind:
         VISIT(st, expr, s->v.While.test);
@@ -1374,7 +1375,7 @@ symtable_visit_stmt(struct symtable *st, stmt_ty s)
         VISIT(st, expr, s->v.AsyncFor.iter);
         VISIT_SEQ(st, stmt, s->v.AsyncFor.body);
         if (s->v.AsyncFor.orelse)
-            VISIT_SEQ(st, stmt, s->v.AsyncFor.orelse);
+            VISIT(st, elsehandler, s->v.AsyncFor.orelse);
         break;
     }
     VISIT_QUIT(st, 1);
@@ -1665,6 +1666,17 @@ symtable_visit_arguments(struct symtable *st, arguments_ty a)
 
 
 static int
+symtable_visit_elsehandler(struct symtable *st, elsehandler_ty eh)
+{
+    if (eh->v.ElseHandler.var) {
+        VISIT(st, expr, eh->v.ElseHandler.var);
+    }
+    VISIT_SEQ(st, stmt, eh->v.ElseHandler.body);
+    return 1;
+}
+
+
+static int
 symtable_visit_excepthandler(struct symtable *st, excepthandler_ty eh)
 {
     if (eh->v.ExceptHandler.type)
@@ -1675,6 +1687,7 @@ symtable_visit_excepthandler(struct symtable *st, excepthandler_ty eh)
     VISIT_SEQ(st, stmt, eh->v.ExceptHandler.body);
     return 1;
 }
+
 
 static int
 symtable_visit_withitem(struct symtable *st, withitem_ty item)

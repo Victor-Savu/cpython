@@ -897,14 +897,18 @@ class ASTValidatorTests(unittest.TestCase):
         x = ast.Name("x", ast.Store())
         y = ast.Name("y", ast.Load())
         p = ast.Pass()
-        self.stmt(ast.For(x, y, [], []), "empty body on For")
-        self.stmt(ast.For(ast.Name("x", ast.Load()), y, [p], []),
+        els = ast.ElseHandler(None, [])
+        self.stmt(ast.For(x, y, [], els), "empty body on For")
+        self.stmt(ast.For(ast.Name("x", ast.Load()), y, [p], els),
                   "must have Store context")
-        self.stmt(ast.For(x, ast.Name("y", ast.Store()), [p], []),
+        self.stmt(ast.For(x, ast.Name("y", ast.Store()), [p], els),
                   "must have Load context")
         e = ast.Expr(ast.Name("x", ast.Store()))
-        self.stmt(ast.For(x, y, [e], []), "must have Load context")
-        self.stmt(ast.For(x, y, [p], [e]), "must have Load context")
+        els_e = ast.ElseHandler(None, [e])
+        named_else = ast.ElseHandler(ast.Name("e", ast.Store()), [e])
+        self.stmt(ast.For(x, y, [e], els), "must have Load context")
+        self.stmt(ast.For(x, y, [p], els_e), "must have Load context")
+        self.stmt(ast.For(x, y, [p], named_else), "must have Load context")
 
     def test_while(self):
         self.stmt(ast.While(ast.Num(3), [], []), "empty body on While")

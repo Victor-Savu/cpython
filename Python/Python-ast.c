@@ -452,6 +452,20 @@ static char *comprehension_fields[]={
     "ifs",
     "is_async",
 };
+static PyTypeObject *elsehandler_type;
+static char *elsehandler_attributes[] = {
+    "lineno",
+    "col_offset",
+    "end_lineno",
+    "end_col_offset",
+};
+static PyObject* ast2obj_elsehandler(void*);
+static PyTypeObject *ElseHandler_type;
+_Py_IDENTIFIER(var);
+static char *ElseHandler_fields[]={
+    "var",
+    "body",
+};
 static PyTypeObject *excepthandler_type;
 static char *excepthandler_attributes[] = {
     "lineno",
@@ -1138,6 +1152,12 @@ static int init_types(void)
                                    comprehension_fields, 4);
     if (!comprehension_type) return 0;
     if (!add_attributes(comprehension_type, NULL, 0)) return 0;
+    elsehandler_type = make_type("elsehandler", &AST_type, NULL, 0);
+    if (!elsehandler_type) return 0;
+    if (!add_attributes(elsehandler_type, elsehandler_attributes, 4)) return 0;
+    ElseHandler_type = make_type("ElseHandler", elsehandler_type,
+                                 ElseHandler_fields, 2);
+    if (!ElseHandler_type) return 0;
     excepthandler_type = make_type("excepthandler", &AST_type, NULL, 0);
     if (!excepthandler_type) return 0;
     if (!add_attributes(excepthandler_type, excepthandler_attributes, 4))
@@ -1182,6 +1202,8 @@ static int obj2ast_unaryop(PyObject* obj, unaryop_ty* out, PyArena* arena);
 static int obj2ast_cmpop(PyObject* obj, cmpop_ty* out, PyArena* arena);
 static int obj2ast_comprehension(PyObject* obj, comprehension_ty* out, PyArena*
                                  arena);
+static int obj2ast_elsehandler(PyObject* obj, elsehandler_ty* out, PyArena*
+                               arena);
 static int obj2ast_excepthandler(PyObject* obj, excepthandler_ty* out, PyArena*
                                  arena);
 static int obj2ast_arguments(PyObject* obj, arguments_ty* out, PyArena* arena);
@@ -1482,8 +1504,8 @@ AnnAssign(expr_ty target, expr_ty annotation, expr_ty value, int simple, int
 }
 
 stmt_ty
-For(expr_ty target, expr_ty iter, asdl_seq * body, asdl_seq * orelse, string
-    type_comment, int lineno, int col_offset, int end_lineno, int
+For(expr_ty target, expr_ty iter, asdl_seq * body, elsehandler_ty orelse,
+    string type_comment, int lineno, int col_offset, int end_lineno, int
     end_col_offset, PyArena *arena)
 {
     stmt_ty p;
@@ -1514,7 +1536,7 @@ For(expr_ty target, expr_ty iter, asdl_seq * body, asdl_seq * orelse, string
 }
 
 stmt_ty
-AsyncFor(expr_ty target, expr_ty iter, asdl_seq * body, asdl_seq * orelse,
+AsyncFor(expr_ty target, expr_ty iter, asdl_seq * body, elsehandler_ty orelse,
          string type_comment, int lineno, int col_offset, int end_lineno, int
          end_col_offset, PyArena *arena)
 {
@@ -2552,6 +2574,24 @@ comprehension(expr_ty target, expr_ty iter, asdl_seq * ifs, int is_async,
     return p;
 }
 
+elsehandler_ty
+ElseHandler(expr_ty var, asdl_seq * body, int lineno, int col_offset, int
+            end_lineno, int end_col_offset, PyArena *arena)
+{
+    elsehandler_ty p;
+    p = (elsehandler_ty)PyArena_Malloc(arena, sizeof(*p));
+    if (!p)
+        return NULL;
+    p->kind = ElseHandler_kind;
+    p->v.ElseHandler.var = var;
+    p->v.ElseHandler.body = body;
+    p->lineno = lineno;
+    p->col_offset = col_offset;
+    p->end_lineno = end_lineno;
+    p->end_col_offset = end_col_offset;
+    return p;
+}
+
 excepthandler_ty
 ExceptHandler(expr_ty type, identifier name, asdl_seq * body, int lineno, int
               col_offset, int end_lineno, int end_col_offset, PyArena *arena)
@@ -2954,7 +2994,7 @@ ast2obj_stmt(void* _o)
         if (_PyObject_SetAttrId(result, &PyId_body, value) == -1)
             goto failed;
         Py_DECREF(value);
-        value = ast2obj_list(o->v.For.orelse, ast2obj_stmt);
+        value = ast2obj_elsehandler(o->v.For.orelse);
         if (!value) goto failed;
         if (_PyObject_SetAttrId(result, &PyId_orelse, value) == -1)
             goto failed;
@@ -2983,7 +3023,7 @@ ast2obj_stmt(void* _o)
         if (_PyObject_SetAttrId(result, &PyId_body, value) == -1)
             goto failed;
         Py_DECREF(value);
-        value = ast2obj_list(o->v.AsyncFor.orelse, ast2obj_stmt);
+        value = ast2obj_elsehandler(o->v.AsyncFor.orelse);
         if (!value) goto failed;
         if (_PyObject_SetAttrId(result, &PyId_orelse, value) == -1)
             goto failed;
@@ -3873,6 +3913,58 @@ ast2obj_comprehension(void* _o)
     value = ast2obj_int(o->is_async);
     if (!value) goto failed;
     if (_PyObject_SetAttrId(result, &PyId_is_async, value) == -1)
+        goto failed;
+    Py_DECREF(value);
+    return result;
+failed:
+    Py_XDECREF(value);
+    Py_XDECREF(result);
+    return NULL;
+}
+
+PyObject*
+ast2obj_elsehandler(void* _o)
+{
+    elsehandler_ty o = (elsehandler_ty)_o;
+    PyObject *result = NULL, *value = NULL;
+    if (!o) {
+        Py_RETURN_NONE;
+    }
+
+    switch (o->kind) {
+    case ElseHandler_kind:
+        result = PyType_GenericNew(ElseHandler_type, NULL, NULL);
+        if (!result) goto failed;
+        value = ast2obj_expr(o->v.ElseHandler.var);
+        if (!value) goto failed;
+        if (_PyObject_SetAttrId(result, &PyId_var, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        value = ast2obj_list(o->v.ElseHandler.body, ast2obj_stmt);
+        if (!value) goto failed;
+        if (_PyObject_SetAttrId(result, &PyId_body, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        break;
+    }
+    value = ast2obj_int(o->lineno);
+    if (!value) goto failed;
+    if (_PyObject_SetAttrId(result, &PyId_lineno, value) < 0)
+        goto failed;
+    Py_DECREF(value);
+    value = ast2obj_int(o->col_offset);
+    if (!value) goto failed;
+    if (_PyObject_SetAttrId(result, &PyId_col_offset, value) < 0)
+        goto failed;
+    Py_DECREF(value);
+    value = ast2obj_int(o->end_lineno);
+    if (!value) goto failed;
+    if (_PyObject_SetAttrId(result, &PyId_end_lineno, value) < 0)
+        goto failed;
+    Py_DECREF(value);
+    value = ast2obj_int(o->end_col_offset);
+    if (!value) goto failed;
+    if (_PyObject_SetAttrId(result, &PyId_end_col_offset, value) < 0)
         goto failed;
     Py_DECREF(value);
     return result;
@@ -5144,7 +5236,7 @@ obj2ast_stmt(PyObject* obj, stmt_ty* out, PyArena* arena)
         expr_ty target;
         expr_ty iter;
         asdl_seq* body;
-        asdl_seq* orelse;
+        elsehandler_ty orelse;
         string type_comment;
 
         if (_PyObject_LookupAttrId(obj, &PyId_target, &tmp) < 0) {
@@ -5206,31 +5298,14 @@ obj2ast_stmt(PyObject* obj, stmt_ty* out, PyArena* arena)
         if (_PyObject_LookupAttrId(obj, &PyId_orelse, &tmp) < 0) {
             return 1;
         }
-        if (tmp == NULL) {
-            PyErr_SetString(PyExc_TypeError, "required field \"orelse\" missing from For");
-            return 1;
+        if (tmp == NULL || tmp == Py_None) {
+            Py_CLEAR(tmp);
+            orelse = NULL;
         }
         else {
             int res;
-            Py_ssize_t len;
-            Py_ssize_t i;
-            if (!PyList_Check(tmp)) {
-                PyErr_Format(PyExc_TypeError, "For field \"orelse\" must be a list, not a %.200s", tmp->ob_type->tp_name);
-                goto failed;
-            }
-            len = PyList_GET_SIZE(tmp);
-            orelse = _Py_asdl_seq_new(len, arena);
-            if (orelse == NULL) goto failed;
-            for (i = 0; i < len; i++) {
-                stmt_ty val;
-                res = obj2ast_stmt(PyList_GET_ITEM(tmp, i), &val, arena);
-                if (res != 0) goto failed;
-                if (len != PyList_GET_SIZE(tmp)) {
-                    PyErr_SetString(PyExc_RuntimeError, "For field \"orelse\" changed size during iteration");
-                    goto failed;
-                }
-                asdl_seq_SET(orelse, i, val);
-            }
+            res = obj2ast_elsehandler(tmp, &orelse, arena);
+            if (res != 0) goto failed;
             Py_CLEAR(tmp);
         }
         if (_PyObject_LookupAttrId(obj, &PyId_type_comment, &tmp) < 0) {
@@ -5259,7 +5334,7 @@ obj2ast_stmt(PyObject* obj, stmt_ty* out, PyArena* arena)
         expr_ty target;
         expr_ty iter;
         asdl_seq* body;
-        asdl_seq* orelse;
+        elsehandler_ty orelse;
         string type_comment;
 
         if (_PyObject_LookupAttrId(obj, &PyId_target, &tmp) < 0) {
@@ -5321,31 +5396,14 @@ obj2ast_stmt(PyObject* obj, stmt_ty* out, PyArena* arena)
         if (_PyObject_LookupAttrId(obj, &PyId_orelse, &tmp) < 0) {
             return 1;
         }
-        if (tmp == NULL) {
-            PyErr_SetString(PyExc_TypeError, "required field \"orelse\" missing from AsyncFor");
-            return 1;
+        if (tmp == NULL || tmp == Py_None) {
+            Py_CLEAR(tmp);
+            orelse = NULL;
         }
         else {
             int res;
-            Py_ssize_t len;
-            Py_ssize_t i;
-            if (!PyList_Check(tmp)) {
-                PyErr_Format(PyExc_TypeError, "AsyncFor field \"orelse\" must be a list, not a %.200s", tmp->ob_type->tp_name);
-                goto failed;
-            }
-            len = PyList_GET_SIZE(tmp);
-            orelse = _Py_asdl_seq_new(len, arena);
-            if (orelse == NULL) goto failed;
-            for (i = 0; i < len; i++) {
-                stmt_ty val;
-                res = obj2ast_stmt(PyList_GET_ITEM(tmp, i), &val, arena);
-                if (res != 0) goto failed;
-                if (len != PyList_GET_SIZE(tmp)) {
-                    PyErr_SetString(PyExc_RuntimeError, "AsyncFor field \"orelse\" changed size during iteration");
-                    goto failed;
-                }
-                asdl_seq_SET(orelse, i, val);
-            }
+            res = obj2ast_elsehandler(tmp, &orelse, arena);
+            if (res != 0) goto failed;
             Py_CLEAR(tmp);
         }
         if (_PyObject_LookupAttrId(obj, &PyId_type_comment, &tmp) < 0) {
@@ -8114,6 +8172,136 @@ failed:
 }
 
 int
+obj2ast_elsehandler(PyObject* obj, elsehandler_ty* out, PyArena* arena)
+{
+    int isinstance;
+
+    PyObject *tmp = NULL;
+    int lineno;
+    int col_offset;
+    int end_lineno;
+    int end_col_offset;
+
+    if (obj == Py_None) {
+        *out = NULL;
+        return 0;
+    }
+    if (_PyObject_LookupAttrId(obj, &PyId_lineno, &tmp) < 0) {
+        return 1;
+    }
+    if (tmp == NULL) {
+        PyErr_SetString(PyExc_TypeError, "required field \"lineno\" missing from elsehandler");
+        return 1;
+    }
+    else {
+        int res;
+        res = obj2ast_int(tmp, &lineno, arena);
+        if (res != 0) goto failed;
+        Py_CLEAR(tmp);
+    }
+    if (_PyObject_LookupAttrId(obj, &PyId_col_offset, &tmp) < 0) {
+        return 1;
+    }
+    if (tmp == NULL) {
+        PyErr_SetString(PyExc_TypeError, "required field \"col_offset\" missing from elsehandler");
+        return 1;
+    }
+    else {
+        int res;
+        res = obj2ast_int(tmp, &col_offset, arena);
+        if (res != 0) goto failed;
+        Py_CLEAR(tmp);
+    }
+    if (_PyObject_LookupAttrId(obj, &PyId_end_lineno, &tmp) < 0) {
+        return 1;
+    }
+    if (tmp == NULL || tmp == Py_None) {
+        Py_CLEAR(tmp);
+        end_lineno = 0;
+    }
+    else {
+        int res;
+        res = obj2ast_int(tmp, &end_lineno, arena);
+        if (res != 0) goto failed;
+        Py_CLEAR(tmp);
+    }
+    if (_PyObject_LookupAttrId(obj, &PyId_end_col_offset, &tmp) < 0) {
+        return 1;
+    }
+    if (tmp == NULL || tmp == Py_None) {
+        Py_CLEAR(tmp);
+        end_col_offset = 0;
+    }
+    else {
+        int res;
+        res = obj2ast_int(tmp, &end_col_offset, arena);
+        if (res != 0) goto failed;
+        Py_CLEAR(tmp);
+    }
+    isinstance = PyObject_IsInstance(obj, (PyObject*)ElseHandler_type);
+    if (isinstance == -1) {
+        return 1;
+    }
+    if (isinstance) {
+        expr_ty var;
+        asdl_seq* body;
+
+        if (_PyObject_LookupAttrId(obj, &PyId_var, &tmp) < 0) {
+            return 1;
+        }
+        if (tmp == NULL || tmp == Py_None) {
+            Py_CLEAR(tmp);
+            var = NULL;
+        }
+        else {
+            int res;
+            res = obj2ast_expr(tmp, &var, arena);
+            if (res != 0) goto failed;
+            Py_CLEAR(tmp);
+        }
+        if (_PyObject_LookupAttrId(obj, &PyId_body, &tmp) < 0) {
+            return 1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"body\" missing from ElseHandler");
+            return 1;
+        }
+        else {
+            int res;
+            Py_ssize_t len;
+            Py_ssize_t i;
+            if (!PyList_Check(tmp)) {
+                PyErr_Format(PyExc_TypeError, "ElseHandler field \"body\" must be a list, not a %.200s", tmp->ob_type->tp_name);
+                goto failed;
+            }
+            len = PyList_GET_SIZE(tmp);
+            body = _Py_asdl_seq_new(len, arena);
+            if (body == NULL) goto failed;
+            for (i = 0; i < len; i++) {
+                stmt_ty val;
+                res = obj2ast_stmt(PyList_GET_ITEM(tmp, i), &val, arena);
+                if (res != 0) goto failed;
+                if (len != PyList_GET_SIZE(tmp)) {
+                    PyErr_SetString(PyExc_RuntimeError, "ElseHandler field \"body\" changed size during iteration");
+                    goto failed;
+                }
+                asdl_seq_SET(body, i, val);
+            }
+            Py_CLEAR(tmp);
+        }
+        *out = ElseHandler(var, body, lineno, col_offset, end_lineno,
+                           end_col_offset, arena);
+        if (*out == NULL) goto failed;
+        return 0;
+    }
+
+    PyErr_Format(PyExc_TypeError, "expected some sort of elsehandler, but got %R", obj);
+    failed:
+    Py_XDECREF(tmp);
+    return 1;
+}
+
+int
 obj2ast_excepthandler(PyObject* obj, excepthandler_ty* out, PyArena* arena)
 {
     int isinstance;
@@ -8888,6 +9076,10 @@ PyInit__ast(void)
         NULL;
     if (PyDict_SetItemString(d, "comprehension", (PyObject*)comprehension_type)
         < 0) return NULL;
+    if (PyDict_SetItemString(d, "elsehandler", (PyObject*)elsehandler_type) <
+        0) return NULL;
+    if (PyDict_SetItemString(d, "ElseHandler", (PyObject*)ElseHandler_type) <
+        0) return NULL;
     if (PyDict_SetItemString(d, "excepthandler", (PyObject*)excepthandler_type)
         < 0) return NULL;
     if (PyDict_SetItemString(d, "ExceptHandler", (PyObject*)ExceptHandler_type)

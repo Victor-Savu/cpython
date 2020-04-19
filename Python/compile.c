@@ -985,8 +985,8 @@ stack_effect(int opcode, int oparg, int jump)
         case UNPACK_EX:
             return (oparg&0xFF) + (oparg>>8);
         case FOR_ITER:
-            /* -1 at end of iterator, 1 if continue iterating. */
-            return jump > 0 ? -1 : 1;
+            /* 0 at end of iterator, 1 if continue iterating. */
+            return jump > 0 ? 0 : 1;
 
         case STORE_ATTR:
             return -2;
@@ -1530,12 +1530,22 @@ find_ann(asdl_seq *stmts)
         case AnnAssign_kind:
             return 1;
         case For_kind:
-            res = find_ann(st->v.For.body) ||
-                  find_ann(st->v.For.orelse);
+            if (st->v.For.orelse) {
+                elsehandler_ty orelse = st->v.For.orelse;
+                if (find_ann(orelse->v.ElseHandler.body)) {
+                    return 1;
+                }
+            }
+            res = find_ann(st->v.For.body);
             break;
         case AsyncFor_kind:
-            res = find_ann(st->v.AsyncFor.body) ||
-                  find_ann(st->v.AsyncFor.orelse);
+            if (st->v.AsyncFor.orelse) {
+                elsehandler_ty orelse = st->v.AsyncFor.orelse;
+                if (find_ann(orelse->v.ElseHandler.body)) {
+                    return 1;
+                }
+            }
+            res = find_ann(st->v.AsyncFor.body);
             break;
         case While_kind:
             res = find_ann(st->v.While.body) ||
@@ -2590,10 +2600,17 @@ compiler_for(struct compiler *c, stmt_ty s)
     VISIT_SEQ(c, stmt, s->v.For.body);
     ADDOP_JABS(c, JUMP_ABSOLUTE, start);
     compiler_use_next_block(c, cleanup);
-
+    elsehandler_ty orelse = s->v.For.orelse;
+    if (orelse && orelse->v.ElseHandler.var) {
+        VISIT(c, expr, orelse->v.ElseHandler.var);
+    }
+    else {
+        ADDOP(c, POP_TOP);
+    }
     compiler_pop_fblock(c, FOR_LOOP, start);
-
-    VISIT_SEQ(c, stmt, s->v.For.orelse);
+    if (orelse) {
+        VISIT_SEQ(c, stmt, orelse->v.ElseHandler.body);
+    }
     compiler_use_next_block(c, end);
     return 1;
 }
@@ -2640,7 +2657,10 @@ compiler_async_for(struct compiler *c, stmt_ty s)
     ADDOP(c, END_ASYNC_FOR);
 
     /* `else` block */
-    VISIT_SEQ(c, stmt, s->v.For.orelse);
+    if (s->v.AsyncFor.orelse) {
+        elsehandler_ty orelse = s->v.AsyncFor.orelse;
+        VISIT_SEQ(c, stmt, orelse->v.ElseHandler.body);
+    }
 
     compiler_use_next_block(c, end);
 
@@ -4244,6 +4264,7 @@ compiler_sync_comprehension_generator(struct compiler *c,
     compiler_use_next_block(c, if_cleanup);
     ADDOP_JABS(c, JUMP_ABSOLUTE, start);
     compiler_use_next_block(c, anchor);
+    ADDOP(c, POP_TOP);
 
     return 1;
 }

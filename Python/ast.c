@@ -20,6 +20,7 @@ static int validate_exprs(asdl_seq *, expr_context_ty, int);
 static int validate_nonempty_seq(asdl_seq *, const char *, const char *);
 static int validate_stmt(stmt_ty);
 static int validate_expr(expr_ty, expr_context_ty);
+static int validate_orelse(elsehandler_ty orelse);
 
 static int
 validate_comprehension(asdl_seq *gens)
@@ -350,6 +351,17 @@ validate_body(asdl_seq *body, const char *owner)
 }
 
 static int
+validate_orelse(elsehandler_ty orelse)
+{
+    expr_ty var = orelse->v.ElseHandler.var;
+    int valid_var = 1;
+    if (var) {
+        valid_var = validate_expr(var, Store);
+    }
+    return valid_var && validate_stmts(orelse->v.ElseHandler.body);
+}
+
+static int
 validate_stmt(stmt_ty stmt)
 {
     Py_ssize_t i;
@@ -390,12 +402,12 @@ validate_stmt(stmt_ty stmt)
         return validate_expr(stmt->v.For.target, Store) &&
             validate_expr(stmt->v.For.iter, Load) &&
             validate_body(stmt->v.For.body, "For") &&
-            validate_stmts(stmt->v.For.orelse);
+            validate_orelse(stmt->v.For.orelse);
     case AsyncFor_kind:
         return validate_expr(stmt->v.AsyncFor.target, Store) &&
             validate_expr(stmt->v.AsyncFor.iter, Load) &&
             validate_body(stmt->v.AsyncFor.body, "AsyncFor") &&
-            validate_stmts(stmt->v.AsyncFor.orelse);
+            validate_orelse(stmt->v.AsyncFor.orelse);
     case While_kind:
         return validate_expr(stmt->v.While.test, Load) &&
             validate_body(stmt->v.While.body, "While") &&
@@ -4058,11 +4070,45 @@ ast_for_while_stmt(struct compiling *c, const node *n)
     return NULL;
 }
 
+static elsehandler_ty
+ast_for_else_clause(struct compiling *c, const node *els, node *body)
+{
+    /* else_clause: 'else' [exprlist] */
+    asdl_seq *suite_seq;
+    expr_ty var = NULL;
+
+    REQ(els, else_clause);
+    REQ(body, suite);
+
+    if (NCH(els) == 2) {
+        const node *node_target = CHILD(els, 1);
+        asdl_seq *_target = ast_for_exprlist(c, node_target, Store);
+        if (!_target)
+            return NULL;
+        var = (expr_ty)asdl_seq_GET(_target, 0);
+        if (NCH(node_target) != 1) {
+            var = Tuple(_target, Store, var->lineno, var->col_offset, var->end_lineno, var->end_col_offset, c->c_arena);
+        }
+    } else if (NCH(els) != 1) {
+        PyErr_Format(PyExc_SystemError,
+                     "wrong number of children for 'except' clause: %d",
+                     NCH(els));
+        return NULL;
+    }
+
+    suite_seq = ast_for_suite(c, body);
+    if (!suite_seq)
+        return NULL;
+
+    return ElseHandler(var, suite_seq, LINENO(els), els->n_col_offset, els->n_end_lineno, els->n_end_col_offset, c->c_arena);
+}
+
 static stmt_ty
 ast_for_for_stmt(struct compiling *c, const node *n0, bool is_async)
 {
     const node * const n = is_async ? CHILD(n0, 1) : n0;
-    asdl_seq *_target, *seq = NULL, *suite_seq;
+    asdl_seq *_target, *suite_seq;
+    elsehandler_ty orelse = NULL;
     expr_ty expression;
     expr_ty target, first;
     const node *node_target;
@@ -4075,8 +4121,8 @@ ast_for_for_stmt(struct compiling *c, const node *n0, bool is_async)
     has_type_comment = TYPE(CHILD(n, 5)) == TYPE_COMMENT;
 
     if (NCH(n) == 9 + has_type_comment) {
-        seq = ast_for_suite(c, CHILD(n, 8 + has_type_comment));
-        if (!seq)
+        orelse = ast_for_else_clause(c, CHILD(n, 6 + has_type_comment), CHILD(n, 8 + has_type_comment));
+        if (!orelse)
             return NULL;
     }
 
@@ -4101,8 +4147,8 @@ ast_for_for_stmt(struct compiling *c, const node *n0, bool is_async)
     if (!suite_seq)
         return NULL;
 
-    if (seq != NULL) {
-        get_last_end_pos(seq, &end_lineno, &end_col_offset);
+    if (orelse != NULL) {
+        get_last_end_pos(orelse->v.ElseHandler.body, &end_lineno, &end_col_offset);
     } else {
         get_last_end_pos(suite_seq, &end_lineno, &end_col_offset);
     }
@@ -4116,11 +4162,11 @@ ast_for_for_stmt(struct compiling *c, const node *n0, bool is_async)
         type_comment = NULL;
 
     if (is_async)
-        return AsyncFor(target, expression, suite_seq, seq, type_comment,
+        return AsyncFor(target, expression, suite_seq, orelse, type_comment,
                         LINENO(n0), n0->n_col_offset,
                         end_lineno, end_col_offset, c->c_arena);
     else
-        return For(target, expression, suite_seq, seq, type_comment,
+        return For(target, expression, suite_seq, orelse, type_comment,
                    LINENO(n), n->n_col_offset,
                    end_lineno, end_col_offset, c->c_arena);
 }

@@ -211,6 +211,15 @@ class Unparser:
             self.dispatch(t.finalbody)
             self.leave()
 
+    def _ElseHandler(self, t):
+        self.fill("else")
+        if t.var:
+            self.write(" ")
+            self.dispatch(t.var)
+        self.enter()
+        self.dispatch(t.body)
+        self.leave()
+
     def _ExceptHandler(self, t):
         self.fill("except")
         if t.type:
@@ -282,10 +291,7 @@ class Unparser:
         self.dispatch(t.body)
         self.leave()
         if t.orelse:
-            self.fill("else")
-            self.enter()
             self.dispatch(t.orelse)
-            self.leave()
 
     def _If(self, t):
         self.fill("if ")

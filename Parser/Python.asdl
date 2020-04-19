@@ -32,8 +32,8 @@ module Python
           | AnnAssign(expr target, expr annotation, expr? value, int simple)
 
           -- use 'orelse' because else is a keyword in target languages
-          | For(expr target, expr iter, stmt* body, stmt* orelse, string? type_comment)
-          | AsyncFor(expr target, expr iter, stmt* body, stmt* orelse, string? type_comment)
+          | For(expr target, expr iter, stmt* body, elsehandler? orelse, string? type_comment)
+          | AsyncFor(expr target, expr iter, stmt* body, elsehandler? orelse, string? type_comment)
           | While(expr test, stmt* body, stmt* orelse)
           | If(expr test, stmt* body, stmt* orelse)
           | With(withitem* items, stmt* body, string? type_comment)
@@ -107,6 +107,9 @@ module Python
     cmpop = Eq | NotEq | Lt | LtE | Gt | GtE | Is | IsNot | In | NotIn
 
     comprehension = (expr target, expr iter, expr* ifs, int is_async)
+
+    elsehandler = ElseHandler(expr? var, stmt* body)
+                  attributes (int lineno, int col_offset, int? end_lineno, int? end_col_offset)
 
     excepthandler = ExceptHandler(expr? type, identifier? name, stmt* body)
                     attributes (int lineno, int col_offset, int? end_lineno, int? end_col_offset)
